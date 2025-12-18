@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  @apply bg-dark text-white font-serif;
+  @apply bg-dark text-cream font-serif;
 }
 
 input, button, select {

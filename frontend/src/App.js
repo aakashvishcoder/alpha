@@ -1,14 +1,27 @@
-import ProfileForm from "./components/ProfileForm";
-import AuthPage from "./components/AuthPage";
-import GraphingCalculator from "./components/GraphingCalculator";
+import React, { useState } from 'react';
+import { ThemeProvider } from './contexts/ThemeContext';
+import Layout from './components/Layout';
+import HomePage from './components/HomePage';
+import GraphingCalculator from './components/GraphingCalculator';
 
 function App() {
+  const [currentView, setCurrentView] = useState('home');
+
+  const renderView = () => {
+    switch (currentView) {
+      case 'graph':
+        return <GraphingCalculator />;
+      default:
+        return <HomePage />;
+    }
+  };
+
   return (
-    <div className="App">
-      {/* <ProfileForm /> */}
-      {/* <AuthPage /> */}
-      <GraphingCalculator />
-    </div>
+    <ThemeProvider>
+      <Layout onNavigate={setCurrentView}>
+        {renderView()}
+      </Layout>
+    </ThemeProvider>
   );
 };
 
