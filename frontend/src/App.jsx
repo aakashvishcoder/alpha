@@ -1,13 +1,13 @@
-import ProfilePage from "./components/ProfileForm";
+import { Routes, Route} from 'react-router-dom';
+import ProfileForm from "./components/ProfileForm";
 import AuthPage from "./components/AuthPage";
 import GraphingCalculator from "./components/GraphingCalculator";
 
 export default function App() {
   return (
-    <div className="App">
-      <ProfileForm />
-      <AuthPage />
-      <GraphingCalculator />
-    </div>
+    <Routes>
+      <Route path="/" element={<ProfileForm />} />
+      <Route path="/grapher" element={<GraphingCalculator />} />
+    </Routes>
   );
 };
