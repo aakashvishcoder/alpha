@@ -2,7 +2,7 @@ import {useState, useEffect, useRef, useCallback} from 'react';
 
 const COLORS = ['#c8a96e', '#7eb8c9', '#a97ec8', '#7ec98a','#c97e7e', '#c9b87e'];
 
-function preprocess(raw) {
+function preprocess(raw) { // all the functiosn
     return raw
         .trim()
         .replace(/\s+/g, '')
@@ -81,17 +81,20 @@ export default function GraphingCalculator() {
     const [equations, setEquations] = useState([]);
     const [view, setView] = useState({x: 0, y: 0, scale: 60});
     const [dragging, setDragging] = useState(null);
-    const [hoveredEq, setHoveredEq] = useState(null);
     const [mousePos, setMousePos] = useState(null);
     const inputRefs = useRef({});
     const [nextEqId, setNextEqId] = useState(1);
+    const [hoveredEq, setHoveredEq] = useState(null);
     const constMap = {};
+    const animationRef = useRef(null);
+    const touchRef = useRef(null);
 
     const draw = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
-        const W = canvas.width, H = canvas.height;
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvas.width / dpr, H = canvas.height / dpr;
         const {x: ox, y: oy, scale} = view;
 
         ctx.fillStyle = '#0a0a0a';
@@ -105,7 +108,7 @@ export default function GraphingCalculator() {
 
         ctx.save();
         ctx.beginPath();
-        ctx.rect(0, 0, W, H)
+        ctx.rect(0, 0, W, H);
         ctx.clip();
 
         const toScreen = (wx, wy) => ({
@@ -129,20 +132,20 @@ export default function GraphingCalculator() {
         const {sy: ay} = toScreen(0, 0);
 
         // grid
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'
-        ctx.lineWidth=1;
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
         for (let wx = startX; wx <= worldRight; wx += step) {
             const {sx} = toScreen(wx, 0);
-            ctx.moveTo(sx, 0); ctx.lineTo(sx, H); 
+            ctx.moveTo(sx, 0); ctx.lineTo(sx, H);
         }
         for (let wy = startY; wy <= worldTop; wy += step) {
-            const { sy} = toScreen(0, wy);
-            ctx.moveTo(0, sy); ctx.lineTo(W, sy); 
+            const {sy} = toScreen(0, wy);
+            ctx.moveTo(0, sy); ctx.lineTo(W, sy);
         }
         ctx.stroke();
 
-        // axes with glow
+        //glowing axis
         ctx.save();
         ctx.shadowColor = 'rgba(240,230,208,0.12)';
         ctx.shadowBlur = 6;
@@ -152,21 +155,21 @@ export default function GraphingCalculator() {
         ctx.beginPath(); ctx.moveTo(0, ay); ctx.lineTo(W, ay); ctx.stroke();
         ctx.restore();
 
-        // tick marks
-        ctx.strokeStyle='rgba(240,230, 208, 0.25)'
-        ctx.lineWidth =1 
+        //tick marks
+        ctx.strokeStyle = 'rgba(240,230,208,0.25)';
+        ctx.lineWidth = 1;
         ctx.beginPath();
         for (let wx = startX; wx <= worldRight; wx += step) {
             if (Math.abs(wx) < step * 0.1) continue;
             const {sx} = toScreen(wx, 0);
             const ty = Math.min(Math.max(ay, 0), H);
-            ctx.moveTo(sx, ty- 3); ctx.lineTo(sx, ty + 3);
+            ctx.moveTo(sx, ty - 3); ctx.lineTo(sx, ty + 3);
         }
-        for(let wy=startY; wy <= worldTop; wy +=step) {
-            if(Math.abs(wy) <step*0.1) continue;
-            const { sy } = toScreen(0, wy);
-            const tx = Math.min(Math.max(ax, 0), W)
-            ctx.moveTo(tx-3, sy); ctx.lineTo(tx+3,sy)
+        for (let wy = startY; wy <= worldTop; wy += step) {
+            if (Math.abs(wy) < step * 0.1) continue;
+            const {sy} = toScreen(0, wy);
+            const tx = Math.min(Math.max(ax, 0), W);
+            ctx.moveTo(tx - 3, sy); ctx.lineTo(tx + 3, sy);
         }
         ctx.stroke();
 
@@ -187,17 +190,15 @@ export default function GraphingCalculator() {
             if (sy < 12 || sy > H - 12) continue;
             ctx.fillText(fmt(wy), Math.min(Math.max(ax - 8, 30), W - 8), sy + 4);
         }
-        // origin
         ctx.fillStyle = 'rgba(240,230,208,0.1)';
         ctx.textAlign = 'right';
         ctx.fillText('0', Math.min(Math.max(ax - 6, 24), W - 6), Math.min(Math.max(ay + 14, 14), H - 6));
 
-        // curves
+        //curves
         equations.forEach(({expr, color, visible, error}) => {
             if (!visible || error || !expr.trim()) return;
-
             const pts = [];
-            const steps = Math.min(W * 2, Math.max(W, Math.round(W*Math.sqrt(scale/60))));
+            const steps = Math.min(W * 2, Math.max(W, Math.round(W * Math.sqrt(scale / 60))));
             for (let i = 0; i <= steps; i++) {
                 const sx = (i / steps) * W;
                 const wx = toWorld(sx, 0).wx;
@@ -206,7 +207,6 @@ export default function GraphingCalculator() {
                 const {sy} = toScreen(wx, wy);
                 pts.push({sx, sy});
             }
-
             const drawPath = () => {
                 ctx.beginPath();
                 let penDown = false, prevSy = null;
@@ -218,8 +218,6 @@ export default function GraphingCalculator() {
                     prevSy = pt.sy;
                 }
             };
-
-            // glow pass
             ctx.save();
             ctx.shadowColor = color;
             ctx.shadowBlur = 12;
@@ -230,8 +228,6 @@ export default function GraphingCalculator() {
             drawPath();
             ctx.stroke();
             ctx.restore();
-
-            // sharp pass
             ctx.save();
             ctx.strokeStyle = color;
             ctx.lineWidth = 1.5;
@@ -242,7 +238,120 @@ export default function GraphingCalculator() {
             ctx.restore();
         });
 
-        // crosshair
+        //inrercepts + intersections
+        const specialPts = [];
+
+        equations.forEach(({expr, color, visible, error}) => {
+            if (!visible || error || !expr.trim()) return;
+            const scanSteps = W * 2;
+            let prevWy = null, prevWx = null;
+            for (let i = 0; i <= scanSteps; i++) {
+                const sx = (i / scanSteps) * W;
+                const curWx = toWorld(sx, 0).wx;
+                const curWy = evaluate(expr, curWx, constMap);
+                if (curWy !== null && prevWy !== null) {
+                    if (prevWy * curWy < 0) {
+                        let lo = prevWx, hi = curWx;
+                        for (let b = 0; b < 20; b++) {
+                            const mid = (lo + hi) / 2;
+                            const mwy = evaluate(expr, mid, constMap);
+                            if (mwy === null) break;
+                            if (evaluate(expr, lo, constMap) * mwy < 0) hi = mid;
+                            else lo = mid;
+                        }
+                        const rootX = (lo + hi) / 2;
+                        const {sx: rsx, sy: rsy} = toScreen(rootX, 0);
+                        if (rsx >= 0 && rsx <= W)
+                            specialPts.push({sx: rsx, sy: rsy, label: `(${fmt(rootX, 3)}, 0)`, color});
+                    }
+                }
+                prevWy = curWy; prevWx = curWx;
+            }
+            const yint = evaluate(expr, 0, constMap);
+            if (yint !== null) {
+                const {sx: ysx, sy: ysy} = toScreen(0, yint);
+                if (ysy >= 0 && ysy <= H)
+                    specialPts.push({sx: ysx, sy: ysy, label: `(0, ${fmt(yint, 3)})`, color});
+            }
+        });
+
+        for (let a = 0; a < equations.length; a++) {
+            for (let b = a + 1; b < equations.length; b++) {
+                const ea = equations[a], eb = equations[b];
+                if (!ea.visible || !eb.visible || ea.error || eb.error) continue;
+                if (!ea.expr.trim() || !eb.expr.trim()) continue;
+                const scanSteps = W * 2;
+                let prevDiff = null, prevWx = null;
+                for (let i = 0; i <= scanSteps; i++) {
+                    const sx = (i / scanSteps) * W;
+                    const curWx = toWorld(sx, 0).wx;
+                    const ya = evaluate(ea.expr, curWx, constMap);
+                    const yb = evaluate(eb.expr, curWx, constMap);
+                    if (ya !== null && yb !== null) {
+                        const curDiff = ya - yb;
+                        if (prevDiff !== null && prevDiff * curDiff < 0) {
+                            let lo = prevWx, hi = curWx;
+                            for (let k = 0; k < 20; k++) {
+                                const mid = (lo + hi) / 2;
+                                const ma = evaluate(ea.expr, mid, constMap);
+                                const mb = evaluate(eb.expr, mid, constMap);
+                                if (ma === null || mb === null) break;
+                                if ((evaluate(ea.expr, lo, constMap) - evaluate(eb.expr, lo, constMap)) * (ma - mb) < 0) hi = mid;
+                                else lo = mid;
+                            }
+                            const ix = (lo + hi) / 2;
+                            const iy = evaluate(ea.expr, ix, constMap);
+                            if (iy !== null) {
+                                const {sx: isx, sy: isy} = toScreen(ix, iy);
+                                if (isx >= 0 && isx <= W && isy >= 0 && isy <= H)
+                                    specialPts.push({sx: isx, sy: isy, label: `(${fmt(ix, 3)}, ${fmt(iy, 3)})`, color: '#f0e6d0'});
+                            }
+                        }
+                        prevDiff = curDiff;
+                    }
+                    prevWx = curWx;
+                }
+            }
+        }
+
+        specialPts.forEach(({sx, sy, label, color}) => {
+            ctx.save();
+            ctx.shadowColor = color;
+            ctx.shadowBlur = 8;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(sx, sy, 4, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+            ctx.fillStyle = '#0a0a0a';
+            ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.arc(sx, sy, 1.5, 0, Math.PI * 2); ctx.fill();
+
+            if (mousePos) {
+                const dist = Math.hypot(mousePos.x - sx, mousePos.y - sy);
+                if (dist < 20) {
+                    const px = 8, py = 5;
+                    ctx.font = "10px 'DM Mono', monospace";
+                    const textW = ctx.measureText(label).width;
+                    let lx = sx + 10, ly = sy - 10;
+                    if (lx + textW + px * 2 > W) lx = sx - textW - px * 2 - 10;
+                    if (ly - py - 12 < 0) ly = sy + 22;
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(15,12,8,0.9)';
+                    ctx.beginPath();
+                    ctx.roundRect(lx - px, ly - 14, textW + px * 2, 20, 2);
+                    ctx.fill();
+                    ctx.strokeStyle = color + '66';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.fillStyle = color;
+                    ctx.fillText(label, lx, ly);
+                    ctx.restore();
+                }
+            }
+        });
+
+        //crosshai
         if (mousePos) {
             const {wx} = toWorld(mousePos.x, mousePos.y);
             ctx.save();
@@ -267,12 +376,31 @@ export default function GraphingCalculator() {
                 ctx.fillStyle = color;
                 ctx.beginPath(); ctx.arc(sx, sy, 3.5, 0, Math.PI * 2); ctx.fill();
                 ctx.restore();
-
                 ctx.strokeStyle = '#0a0a0a';
                 ctx.lineWidth = 1.5;
                 ctx.beginPath(); ctx.arc(sx, sy, 3.5, 0, Math.PI * 2); ctx.stroke();
+
+                const label = `(${fmt(wx, 3)}, ${fmt(wy, 3)})`;
+                const px = 8, py = 5;
+                ctx.font = "10px 'DM Mono', monospace";
+                const textW = ctx.measureText(label).width;
+                let lx = sx + 10, ly = sy - 10;
+                if (lx + textW + px * 2 > W) lx = sx - textW - px * 2 - 10;
+                if (ly - py - 12 < 0) ly = sy + 22;
+                ctx.save();
+                ctx.fillStyle = 'rgba(15,12,8,0.85)';
+                ctx.beginPath();
+                ctx.roundRect(lx - px, ly - 14, textW + px * 2, 20, 2);
+                ctx.fill();
+                ctx.strokeStyle = color + '66';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.fillStyle = color;
+                ctx.fillText(label, lx, ly);
+                ctx.restore();
             });
         }
+
         ctx.restore();
     }, [view, equations, mousePos]);
 
@@ -280,10 +408,10 @@ export default function GraphingCalculator() {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const resize = () => {
-            const dpr = window.devicePixelRatio||1;
-            canvas.width = canvas.offsetWidth *dpr;
-            canvas.height=canvas.offsetHeight*dpr;
-            canvas.getContext('2d').scale(dpr, dpr)
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = canvas.offsetWidth * dpr;
+            canvas.height = canvas.offsetHeight * dpr;
+            canvas.getContext('2d').scale(dpr, dpr);
             draw();
         };
         resize();
@@ -300,7 +428,7 @@ export default function GraphingCalculator() {
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
         const dpr = window.devicePixelRatio || 1;
-        const W = canvas.width / dpr, H = canvas.height /dpr;
+        const W = canvas.width / dpr, H = canvas.height / dpr;
         const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
         setView(v => {
             const wx = (mx - W/2) / v.scale + v.x;
@@ -311,31 +439,26 @@ export default function GraphingCalculator() {
     };
 
     const onMouseDown = (e) => setDragging({x: e.clientX, y: e.clientY, ox: view.x, oy: view.y});
-    const animationRef = useRef(null)
     const onMouseMove = (e) => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const rect = canvas.getBoundingClientRect();
-        const pos = {x: e.clientX - rect.left, y: e.clientY - rect.top }
-
+        const pos = {x: e.clientX - rect.left, y: e.clientY - rect.top};
         if (dragging) {
             const dx = e.clientX - dragging.x;
             const dy = e.clientY - dragging.y;
             setView(v => ({...v, x: dragging.ox - dx/v.scale, y: dragging.oy + dy/v.scale}));
         }
-        if (animationRef.current) cancelAnimationFrame(animationRef.current)
-        animationRef.current = requestAnimationFrame(() => {
-            setMousePos(pos);
-        });
-    }
+        if (animationRef.current) cancelAnimationFrame(animationRef.current);
+        animationRef.current = requestAnimationFrame(() => setMousePos(pos));
+    };
     const onMouseLeave = () => { setDragging(null); setMousePos(null); };
     const onMouseUp = () => setDragging(null);
 
-    const touchRef = useRef(null);
     const onTouchStart = (e) => {
-        if (e.touches.length === 1) {
+        if (e.touches.length === 1)
             touchRef.current = {x: e.touches[0].clientX, y: e.touches[0].clientY, ox: view.x, oy: view.y, type: 'drag'};
-        } else if (e.touches.length === 2) {
+        else if (e.touches.length === 2) {
             const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
             touchRef.current = {dist: d, scale: view.scale, type: 'pinch'};
         }
@@ -369,8 +492,8 @@ export default function GraphingCalculator() {
     };
 
     const worldCoords = mousePos && canvasRef.current ? (() => {
-        const dpr= window.devicePixelRatio ||1;
-        const W = canvasRef.current.width /dpr, H = canvasRef.current.height /dpr;
+        const dpr = window.devicePixelRatio || 1;
+        const W = canvasRef.current.width / dpr, H = canvasRef.current.height / dpr;
         return {wx: (mousePos.x - W/2) / view.scale + view.x, wy: -(mousePos.y - H/2) / view.scale + view.y};
     })() : null;
 
@@ -379,26 +502,15 @@ export default function GraphingCalculator() {
     const resetView = () => setView({x: 0, y: 0, scale: 60});
 
     const onEqKeyDown = (e, id, idx) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            addEquation();
-        }
+        if (e.key === 'Enter') { e.preventDefault(); addEquation(); }
         if (e.key === 'Backspace' && equations[idx].expr === '') {
             e.preventDefault();
             removeEquation(id);
             const prev = equations[idx - 1];
             if (prev) setTimeout(() => inputRefs.current[prev.id]?.focus(), 50);
         }
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            const prev = equations[idx - 1];
-            if (prev) inputRefs.current[prev.id]?.focus();
-        }
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            const next = equations[idx + 1];
-            if (next) inputRefs.current[next.id]?.focus();
-        }
+        if (e.key === 'ArrowUp') { e.preventDefault(); const prev = equations[idx-1]; if (prev) inputRefs.current[prev.id]?.focus(); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); const next = equations[idx+1]; if (next) inputRefs.current[next.id]?.focus(); }
     };
 
     return (
@@ -407,17 +519,7 @@ export default function GraphingCalculator() {
                 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
                 .font-playfair { font-family: 'Playfair Display', serif }
                 .font-mono-dm  { font-family: 'DM Mono', monospace }
-                .eq-input {
-                    background: transparent;
-                    outline: none;
-                    width: 100%;
-                    color: #f0e6d0;
-                    font-family: 'DM Mono', monospace;
-                    font-size: 0.85rem;
-                    border: none;
-                    padding: 0;
-                    caret-color: #c8a96e;
-                }
+                .eq-input { background: transparent; outline: none; width: 100%; color: #f0e6d0; font-family: 'DM Mono', monospace; font-size: 0.85rem; border: none; padding: 0; caret-color: #c8a96e; }
                 .eq-input::placeholder { color: #2a2a2a }
                 .eq-row:focus-within .eq-num { color: #c8a96e }
                 .scrollbar-hide::-webkit-scrollbar { display: none }
@@ -425,9 +527,8 @@ export default function GraphingCalculator() {
             `}</style>
 
             <div className="w-64 flex-shrink-0 bg-[#111] border-r border-[#1e1e1e] flex flex-col">
-
                 <div className="border-b border-[#1e1e1e] px-5 py-3.5 flex items-center gap-2">
-                    <span className="font-playfair text-lg font-black text-[#f0e6d0] tracking-tight">alpha</span>
+                    <span className="font-playfair text-lg font-black text-[#f0e6d0] tracking-tight">𝕃eibniz</span>
                     <span className="w-1 h-1 rounded-full bg-[#c8a96e]" />
                     <span className="font-mono-dm text-[0.55rem] text-[#333] uppercase tracking-widest mt-0.5">Grapher</span>
                 </div>
@@ -436,9 +537,9 @@ export default function GraphingCalculator() {
                     {equations.map((eq, idx) => (
                         <div
                             key={eq.id}
-                            className={`eq-row group flex items-center border-b border-[#1a1a1a] transition-colors ${
-                                eq.error ? 'bg-[#1a0d0d]' : 'hover:bg-[#151515]'
-                            }`}
+                            onMouseEnter={() => setHoveredEq(eq.id)}
+                            onMouseLeave={() => setHoveredEq(null)}
+                            className={`eq-row group flex items-center border-b border-[#1a1a1a] transition-colors ${eq.error ? 'bg-[#1a0d0d]' : 'hover:bg-[#151515]'}`}
                         >
                             <button
                                 onClick={() => toggleVisible(eq.id)}
@@ -463,25 +564,14 @@ export default function GraphingCalculator() {
                             />
                             <div className="flex items-center gap-1.5 pr-2.5 flex-shrink-0">
                                 {eq.error && <span className="font-mono-dm text-[#c97e7e] text-[0.55rem]">err</span>}
-                                <button
-                                    onClick={() => removeEquation(eq.id)}
-                                    className="opacity-0 group-hover:opacity-100 text-[#333] hover:text-[#c97e7e] transition-all text-sm leading-none"
-                                >×</button>
+                                <button onClick={() => removeEquation(eq.id)} className="opacity-0 group-hover:opacity-100 text-[#333] hover:text-[#c97e7e] transition-all text-sm leading-none">×</button>
                             </div>
                         </div>
                     ))}
-
-                    <button
-                        onClick={() => addEquation()}
-                        className="w-full flex items-center border-b border-[#1a1a1a] hover:bg-[#151515] transition-colors group"
-                    >
+                    <button onClick={() => addEquation()} className="w-full flex items-center border-b border-[#1a1a1a] hover:bg-[#151515] transition-colors group">
                         <div className="w-1 self-stretch bg-transparent" />
-                        <span className="font-mono-dm text-[0.6rem] text-[#2a2a2a] w-7 text-center group-hover:text-[#444] transition-colors select-none">
-                            {equations.length + 1}
-                        </span>
-                        <span className="font-mono-dm text-[0.75rem] text-[#2a2a2a] group-hover:text-[#444] py-3.5 transition-colors">
-                            + expression
-                        </span>
+                        <span className="font-mono-dm text-[0.6rem] text-[#2a2a2a] w-7 text-center group-hover:text-[#444] transition-colors select-none">{equations.length + 1}</span>
+                        <span className="font-mono-dm text-[0.75rem] text-[#2a2a2a] group-hover:text-[#444] py-3.5 transition-colors">+ expression</span>
                     </button>
                 </div>
 
@@ -490,12 +580,9 @@ export default function GraphingCalculator() {
                         {worldCoords ? `(${fmt(worldCoords.wx, 3)}, ${fmt(worldCoords.wy, 3)})` : ''}
                     </div>
                     <div className="flex items-center gap-1.5">
-                        <button onClick={() => setView(v => ({...v, scale: Math.min(v.scale * 1.3, 2000)}))}
-                            className="flex-1 bg-[#0d0d0d] border border-[#222] hover:border-[#333] text-[#f0e6d0] font-mono-dm text-sm py-1 rounded-sm transition-all">+</button>
-                        <button onClick={resetView}
-                            className="flex-1 bg-[#0d0d0d] border border-[#222] hover:border-[#333] text-[#444] font-mono-dm text-[0.6rem] py-1 rounded-sm transition-all hover:text-[#f0e6d0]">reset</button>
-                        <button onClick={() => setView(v => ({...v, scale: Math.max(v.scale / 1.3, 5)}))}
-                            className="flex-1 bg-[#0d0d0d] border border-[#222] hover:border-[#333] text-[#f0e6d0] font-mono-dm text-sm py-1 rounded-sm transition-all">−</button>
+                        <button onClick={() => setView(v => ({...v, scale: Math.min(v.scale * 1.3, 2000)}))} className="flex-1 bg-[#0d0d0d] border border-[#222] hover:border-[#333] text-[#f0e6d0] font-mono-dm text-sm py-1 rounded-sm transition-all">+</button>
+                        <button onClick={resetView} className="flex-1 bg-[#0d0d0d] border border-[#222] hover:border-[#333] text-[#444] font-mono-dm text-[0.6rem] py-1 rounded-sm transition-all hover:text-[#f0e6d0]">reset</button>
+                        <button onClick={() => setView(v => ({...v, scale: Math.max(v.scale / 1.3, 5)}))} className="flex-1 bg-[#0d0d0d] border border-[#222] hover:border-[#333] text-[#f0e6d0] font-mono-dm text-sm py-1 rounded-sm transition-all">−</button>
                     </div>
                 </div>
             </div>
@@ -503,8 +590,8 @@ export default function GraphingCalculator() {
             <div className="flex-1 relative">
                 <canvas
                     ref={canvasRef}
-                    className='w-full h-full'
-                    style={{cursor: dragging? 'grabbing':"crosshair"}}
+                    className="w-full h-full"
+                    style={{cursor: dragging ? 'grabbing' : 'crosshair'}}
                     onWheel={onWheel}
                     onMouseDown={onMouseDown}
                     onMouseMove={onMouseMove}
@@ -512,7 +599,7 @@ export default function GraphingCalculator() {
                     onMouseLeave={onMouseLeave}
                     onTouchStart={onTouchStart}
                     onTouchMove={onTouchMove}
-                    onTouchEnd={() => {touchRef.current = null;}}
+                    onTouchEnd={() => { touchRef.current = null; }}
                 />
             </div>
         </div>
