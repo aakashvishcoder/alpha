@@ -1,7 +1,7 @@
 import { Routes, Route} from 'react-router-dom';
 import ProfileForm from "./components/ProfileForm";
 import AuthPage from "./components/AuthPage";
-import GraphingCalculator from "./components/GraphingCalculator";
+import GraphingCalculator from "./components/gc/GraphingCalculator";
 
 export default function App() {
   return (
